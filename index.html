@@ -34,9 +34,13 @@
 </head>
 <body>
 
-  <div class="app-header text-center">
+<div class="app-header text-center">
     <h4 class="m-0 fw-bold">Admin Penjualan</h4>
     <p class="small opacity-75 mb-0">Local Storage Mode</p>
+    
+    <button id="btnInstall" class="btn btn-sm btn-warning fw-bold mt-2" style="display: none;">
+      <i class="fas fa-download"></i> Install ka HP
+    </button>
   </div>
 
   <div id="formInput" class="page-section active">
@@ -339,6 +343,29 @@
     }
 
     window.onload = loadDropdowns;
+
+    let deferredPrompt;
+const btnInstall = document.getElementById('btnInstall');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Nyegah Chrome nembongkeun pop-up bawaan
+  e.preventDefault();
+  deferredPrompt = e;
+  // Munculkeun tombol install jieunan urang
+  btnInstall.style.display = 'inline-block';
+});
+
+btnInstall.addEventListener('click', async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      btnInstall.style.display = 'none';
+    }
+    deferredPrompt = null;
+  }
+});
   </script>
 </body>
+
 </html>
