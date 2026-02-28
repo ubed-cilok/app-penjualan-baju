@@ -46,12 +46,12 @@
 </head>
 <body>
 
-<div class="app-header text-center">
+  <div class="app-header text-center">
     <h4 class="m-0 fw-bold">Admin Penjualan</h4>
-    <p class="small opacity-75 mb-0">HALIMAH.ID</p>
+    <p class="small opacity-75 mb-0">Halimah.id</p>
     
     <button id="btnInstall" class="btn btn-sm btn-warning fw-bold mt-2" style="display: none;">
-      <i class="fas fa-download"></i> Install ka HP
+      <i class="fas fa-download"></i> Install Aplikasi
     </button>
   </div>
 
@@ -71,7 +71,7 @@
           <div class="col-6 mb-3"><label class="small fw-semibold text-muted">Tanggal</label><input type="date" class="form-control" name="tanggal" id="tanggal" required></div>
           <div class="col-6 mb-3"><label class="small fw-semibold text-muted">Status</label>
             <select class="form-select" name="status" id="status">
-              <option value="Proses Jahit">Proses Jahit</option><option value="Packing">Packing</option><option value="Sedang Dikirim">Sedang Dikirim</option><option value="Selesai">Selesai</option>
+              <option value="Dipesan">Dipesan</option><option value="Proses">Proses</option><option value="Packing">Packing</option><option value="Sedang Dikirim">Sedang Dikirim</option><option value="Selesai">Selesai</option>
             </select>
           </div>
         </div>
@@ -121,7 +121,11 @@
     <div class="card">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h6 class="fw-bold m-0">Database</h6>
-        <button onclick="exportToExcel()" class="btn btn-sm btn-success shadow-sm"><i class="fas fa-file-excel"></i> Export Excel</button>
+        <div>
+          <input type="file" id="fileImport" accept=".xlsx, .xls" style="display: none;">
+          <button onclick="document.getElementById('fileImport').click()" class="btn btn-sm btn-info text-white shadow-sm me-1"><i class="fas fa-file-import"></i> Import</button>
+          <button onclick="exportToExcel()" class="btn btn-sm btn-success shadow-sm"><i class="fas fa-file-excel"></i> Export</button>
+        </div>
       </div>
       
       <div class="filter-box">
@@ -143,8 +147,7 @@
   </div>
 
   <div id="halamanGrafik" class="page-section"><div class="card"><h6 class="fw-bold mb-3">Grafik Produk</h6><canvas id="myChart"></canvas></div></div>
-  
-  <div id="halamanFee" class="page-section"><div class="card p-3"><h6 class="fw-bold">Laporan Fee Marketer</h6><div class="table-responsive mt-3"><table class="table table-bordered text-center align-middle" style="font-size:12px;"><thead class="table-light"><tr><th>Marketer</th><th>Total Fee (Rp)</th></tr></thead><tbody id="tabelFeeBody"></tbody><tfoot class="table-secondary fw-bold"><tr><td>Total</td><td id="grandTotalFee">0</td></tr></tfoot></table></div></div></div>
+  <div id="halamanFee" class="page-section"><div class="card p-3"><h6 class="fw-bold">Laporan Fee Marketer</h6><div class="table-responsive mt-3"><table class="table table-bordered text-center align-middle" style="font-size:12px;"><thead class="table-light"><tr><th>Marketer</th><th>Total Fee (Rp)</th></tr></thead><tbody id="tabelFeeBody"></tbody><tfoot class="table-secondary fw-bold"><tr><td>Total Keseluruhan</td><td id="grandTotalFee">0</td></tr></tfoot></table></div></div></div>
   
   <div id="halamanPiutang" class="page-section">
     <div class="card p-3">
@@ -155,6 +158,12 @@
             <tr><th>Nama</th><th>Produk</th><th>Brand</th><th>Series</th><th>Jenis Orderan</th><th>Size</th><th>Sisa (Rp)</th></tr>
           </thead>
           <tbody id="tabelPiutangBody"></tbody>
+          <tfoot class="table-secondary fw-bold">
+            <tr>
+              <td colspan="6" class="text-end pe-3">Total Piutang Keseluruhan:</td>
+              <td class="text-danger" id="grandTotalPiutang">0</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
@@ -213,6 +222,54 @@
       XLSX.writeFile(workbook, `Penjualan_Baju_${new Date().toISOString().split('T')[0]}.xlsx`);
     }
 
+    document.getElementById('fileImport').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if(!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        try {
+          const data = new Uint8Array(event.target.result);
+          const workbook = XLSX.read(data, {type: 'array'});
+          const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+
+          if(jsonData.length === 0) { alert("File Excel kosong atawa formatna beda!"); return; }
+
+          let localData = getLocalData();
+          let count = 0;
+
+          jsonData.forEach(row => {
+            // Pami file excelna teu nyantumkeun ID, otomatis di-generate ID anyar sangkan teu error
+            let autoId = new Date().getTime() + Math.floor(Math.random() * 10000);
+            
+            let obj = {
+              id: row["ID Transaksi"] || row["ID"] || autoId,
+              tanggal: row["Tanggal"] || "",
+              namaPembeli: row["Nama Pembeli"] || "",
+              namaProduk: row["Produk"] || "",
+              brand: row["Brand"] || "",
+              series: row["Series"] || "",
+              ukuran: row["Ukuran"] || row["Size"] || "",
+              jenisOrder: row["Jenis Orderan"] || row["Jenis Order"] || "",
+              harga: cleanNum(row["Harga"]), dp: cleanNum(row["DP"]), cicilan1: cleanNum(row["Cicilan"]), sisa: cleanNum(row["Sisa"]),
+              status: row["Status"] || "Proses Jahit",
+              marketer: row["Marketer"] || "",
+              feeMarketer: cleanNum(row["Fee Marketer"]), feeBaju: cleanNum(row["Fee Baju"])
+            };
+            
+            let existingIdx = localData.findIndex(d => d.id.toString() === obj.id.toString());
+            if(existingIdx > -1) { localData[existingIdx] = obj; } else { localData.push(obj); }
+            count++;
+          });
+
+          saveLocalData(localData); loadAllData(); loadDropdowns();
+          alert(`Suksés import ${count} data!`);
+        } catch(error) { alert("Gagal ngabaca file!"); }
+        document.getElementById('fileImport').value = ""; 
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
     function submitData() {
       let form = document.getElementById('penjualanForm');
       let obj = Object.fromEntries(new FormData(form).entries());
@@ -234,113 +291,48 @@
     function loadAllData() { renderTabel(getLocalData().reverse()); }
 
     function filterTabel() {
-      let sNama = document.getElementById('searchNama').value.toLowerCase();
-      let fP = document.getElementById('fProduk').value.toLowerCase();
-      let fB = document.getElementById('fBrand').value.toLowerCase();
-      let fS = document.getElementById('fSeries').value.toLowerCase();
+      let sNama = document.getElementById('searchNama').value.toLowerCase(); let fP = document.getElementById('fProduk').value.toLowerCase(); let fB = document.getElementById('fBrand').value.toLowerCase(); let fS = document.getElementById('fSeries').value.toLowerCase();
       let data = getLocalData().reverse().filter(item => (item.namaPembeli || '').toLowerCase().includes(sNama) && (item.namaProduk || '').toLowerCase().includes(fP) && (item.brand || '').toLowerCase().includes(fB) && (item.series || '').toLowerCase().includes(fS));
       renderTabel(data);
     }
 
     function renderTabel(data) {
-      const tbody = document.getElementById('tabelDataBody');
-      tbody.innerHTML = '';
+      const tbody = document.getElementById('tabelDataBody'); tbody.innerHTML = '';
       if(data.length === 0) { tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Belum ada data</td></tr>'; return; }
-      
       data.forEach(item => {
         let sisaText = item.sisa <= 0 ? `<span class="badge-lunas">Lunas</span>` : `<span class="badge-sisa">Rp ${item.sisa.toLocaleString('id-ID')}</span>`;
-        tbody.innerHTML += `
-          <tr>
-            <td>
-              <div class="fw-bold text-primary">${item.namaPembeli}</div>
-              <div class="text-muted small">${item.tanggal} | ${item.namaProduk}</div>
-              <div class="x-small text-uppercase text-secondary">${item.brand} - ${item.series}</div>
-            </td>
-            <td>
-              <div class="mb-1">${sisaText}</div>
-              <div class="small text-muted">${item.status}</div>
-            </td>
-            <td>
-              <div class="d-flex gap-1">
-                <button class="btn btn-sm btn-outline-warning border-0" onclick="siapkanEdit('${item.id}')" title="Edit"><i class="fas fa-edit"></i></button>
-                <button class="btn btn-sm btn-outline-danger border-0" onclick="hapusData('${item.id}')" title="Hapus"><i class="fas fa-trash-alt"></i></button>
-              </div>
-            </td>
-          </tr>`;
+        tbody.innerHTML += `<tr><td><div class="fw-bold text-primary">${item.namaPembeli}</div><div class="text-muted small">${item.tanggal} | ${item.namaProduk}</div><div class="x-small text-uppercase text-secondary">${item.brand} - ${item.series}</div></td><td><div class="mb-1">${sisaText}</div><div class="small text-muted">${item.status}</div></td><td><div class="d-flex gap-1"><button class="btn btn-sm btn-outline-warning border-0" onclick="siapkanEdit('${item.id}')" title="Edit"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-outline-danger border-0" onclick="hapusData('${item.id}')" title="Hapus"><i class="fas fa-trash-alt"></i></button></div></td></tr>`;
       });
     }
 
-    // FUNGSI HAPUS DATA
     function hapusData(id) {
       if(confirm("Yakin badé ngahapus data ieu? Data nu tos dihapus moal tiasa balik deui.")) {
-        let data = getLocalData();
-        let newData = data.filter(d => d.id.toString() !== id.toString());
-        saveLocalData(newData);
-        loadAllData(); // Refresh tabel
-        loadDropdowns(); // Refresh dropdown
+        let newData = getLocalData().filter(d => d.id.toString() !== id.toString());
+        saveLocalData(newData); loadAllData(); loadDropdowns();
       }
     }
 
     function siapkanEdit(id) {
-      let data = getLocalData();
-      const item = data.find(x => x.id.toString() === id.toString());
-      if(!item) return;
-
-      document.getElementById('idEdit').value = item.id;
-      document.getElementById('namaPembeli').value = item.namaPembeli;
-      document.getElementById('tanggal').value = item.tanggal;
-      document.getElementById('status').value = item.status;
-      document.getElementById('namaProduk').value = item.namaProduk;
-      document.getElementById('brand').value = item.brand;
-      document.getElementById('series').value = item.series;
-      document.getElementById('ukuran').value = item.ukuran;
-      document.getElementById('jenisOrder').value = item.jenisOrder;
-      
-      document.getElementById('harga').value = formatRupiah(item.harga);
-      document.getElementById('dp').value = formatRupiah(item.dp);
-      document.getElementById('cicilan1').value = formatRupiah(item.cicilan1);
-      document.getElementById('sisa').value = formatRupiah(item.sisa);
-      
-      document.getElementById('marketer').value = item.marketer;
-      document.getElementById('feeMarketer').value = formatRupiah(item.feeMarketer);
-      document.getElementById('feeBaju').value = formatRupiah(item.feeBaju);
-
-      document.getElementById('formTitle').innerText = "Edit Transaksi";
-      document.getElementById('btnSimpan').innerText = "Update Data";
-      document.getElementById('btnBatal').classList.remove('d-none');
-      switchTab('formInput', document.getElementById('navInput'));
+      const item = getLocalData().find(x => x.id.toString() === id.toString()); if(!item) return;
+      document.getElementById('idEdit').value = item.id; document.getElementById('namaPembeli').value = item.namaPembeli; document.getElementById('tanggal').value = item.tanggal; document.getElementById('status').value = item.status; document.getElementById('namaProduk').value = item.namaProduk; document.getElementById('brand').value = item.brand; document.getElementById('series').value = item.series; document.getElementById('ukuran').value = item.ukuran; document.getElementById('jenisOrder').value = item.jenisOrder; document.getElementById('harga').value = formatRupiah(item.harga); document.getElementById('dp').value = formatRupiah(item.dp); document.getElementById('cicilan1').value = formatRupiah(item.cicilan1); document.getElementById('sisa').value = formatRupiah(item.sisa); document.getElementById('marketer').value = item.marketer; document.getElementById('feeMarketer').value = formatRupiah(item.feeMarketer); document.getElementById('feeBaju').value = formatRupiah(item.feeBaju);
+      document.getElementById('formTitle').innerText = "Edit Transaksi"; document.getElementById('btnSimpan').innerText = "Update Data"; document.getElementById('btnBatal').classList.remove('d-none'); switchTab('formInput', document.getElementById('navInput'));
     }
 
-    function batalEdit() {
-      document.getElementById('penjualanForm').reset();
-      document.getElementById('idEdit').value = "";
-      document.getElementById('btnBatal').classList.add('d-none');
-      document.getElementById('formTitle').innerHTML = '<i class="fas fa-plus-circle me-2 text-primary"></i>Transaksi Baru';
-      document.getElementById('btnSimpan').innerText = "Simpan Data";
-    }
+    function batalEdit() { document.getElementById('penjualanForm').reset(); document.getElementById('idEdit').value = ""; document.getElementById('btnBatal').classList.add('d-none'); document.getElementById('formTitle').innerHTML = '<i class="fas fa-plus-circle me-2 text-primary"></i>Transaksi Baru'; document.getElementById('btnSimpan').innerText = "Simpan Data"; }
 
     function loadDropdowns() {
-      let data = getLocalData();
-      let pembeli = [...new Set(data.map(d => d.namaPembeli).filter(Boolean))];
-      let produk = [...new Set(data.map(d => d.namaProduk).filter(Boolean))];
-      let marketer = [...new Set(data.map(d => d.marketer).filter(Boolean))];
-      document.getElementById('listPembeli').innerHTML = pembeli.map(x => `<option value="${x}">`).join('');
-      document.getElementById('listProduk').innerHTML = produk.map(x => `<option value="${x}">`).join('');
-      document.getElementById('listMarketer').innerHTML = marketer.map(x => `<option value="${x}">`).join('');
+      let data = getLocalData(); let pembeli = [...new Set(data.map(d => d.namaPembeli).filter(Boolean))]; let produk = [...new Set(data.map(d => d.namaProduk).filter(Boolean))]; let marketer = [...new Set(data.map(d => d.marketer).filter(Boolean))];
+      document.getElementById('listPembeli').innerHTML = pembeli.map(x => `<option value="${x}">`).join(''); document.getElementById('listProduk').innerHTML = produk.map(x => `<option value="${x}">`).join(''); document.getElementById('listMarketer').innerHTML = marketer.map(x => `<option value="${x}">`).join('');
     }
 
     function loadChart() {
-      let data = getLocalData();
-      let counts = {};
-      data.forEach(d => { if(d.namaProduk) counts[d.namaProduk] = (counts[d.namaProduk] || 0) + 1; });
-      const ctx = document.getElementById('myChart');
-      if(myChartInstance) myChartInstance.destroy();
+      let counts = {}; getLocalData().forEach(d => { if(d.namaProduk) counts[d.namaProduk] = (counts[d.namaProduk] || 0) + 1; });
+      const ctx = document.getElementById('myChart'); if(myChartInstance) myChartInstance.destroy();
       myChartInstance = new Chart(ctx, { type: 'bar', data: { labels: Object.keys(counts), datasets: [{ label: 'Jumlah Terjual', data: Object.values(counts), backgroundColor: '#6366f1' }] } });
     }
 
     function loadFee() {
-      let data = getLocalData(); let fees = {}; let total = 0;
-      data.forEach(d => { if(d.marketer) { let f = parseFloat(d.feeMarketer) || 0; fees[d.marketer] = (fees[d.marketer] || 0) + f; total += f; } });
+      let fees = {}; let total = 0; getLocalData().forEach(d => { if(d.marketer) { let f = parseFloat(d.feeMarketer) || 0; fees[d.marketer] = (fees[d.marketer] || 0) + f; total += f; } });
       let tb = document.getElementById('tabelFeeBody'); tb.innerHTML = '';
       if(Object.keys(fees).length === 0) tb.innerHTML = '<tr><td colspan="2" class="text-muted">Belum ada data</td></tr>';
       for(let m in fees) { tb.innerHTML += `<tr><td class="fw-bold">${m}</td><td>${fees[m].toLocaleString('id-ID')}</td></tr>`; }
@@ -348,37 +340,31 @@
     }
 
     function loadPiutang() {
-      let data = getLocalData().filter(d => (parseFloat(d.sisa) || 0) > 0);
-      let tb = document.getElementById('tabelPiutangBody'); tb.innerHTML = '';
-      if(data.length === 0) { tb.innerHTML = '<tr><td colspan="7" class="text-success fw-bold text-center">Hebat! Tidak ada piutang. Semua lunas.</td></tr>'; return; }
-      data.forEach(i => { tb.innerHTML += `<tr><td class="fw-bold">${i.namaPembeli || '-'}</td><td>${i.namaProduk || '-'}</td><td>${i.brand || '-'}</td><td>${i.series || '-'}</td><td>${i.jenisOrder || '-'}</td><td>${i.ukuran || '-'}</td><td class="text-danger fw-bold">${i.sisa.toLocaleString('id-ID')}</td></tr>`; });
+      let dataP = getLocalData().filter(d => (parseFloat(d.sisa) || 0) > 0);
+      let tb = document.getElementById('tabelPiutangBody'); 
+      tb.innerHTML = '';
+      let totalPiutang = 0; // Kanggo ngitung total
+
+      if(dataP.length === 0) { 
+        tb.innerHTML = '<tr><td colspan="7" class="text-success fw-bold text-center">Hebat! Tidak ada piutang. Semua lunas.</td></tr>'; 
+        document.getElementById('grandTotalPiutang').innerText = "0";
+        return; 
+      }
+
+      dataP.forEach(i => { 
+        totalPiutang += parseFloat(i.sisa) || 0; // Ditambahkeun
+        tb.innerHTML += `<tr><td class="fw-bold">${i.namaPembeli || '-'}</td><td>${i.namaProduk || '-'}</td><td>${i.brand || '-'}</td><td>${i.series || '-'}</td><td>${i.jenisOrder || '-'}</td><td>${i.ukuran || '-'}</td><td class="text-danger fw-bold">${i.sisa.toLocaleString('id-ID')}</td></tr>`; 
+      });
+
+      // Simpen hasilna kana baris Total
+      document.getElementById('grandTotalPiutang').innerText = totalPiutang.toLocaleString('id-ID');
     }
 
+    let deferredPrompt; const btnInstall = document.getElementById('btnInstall');
+    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; btnInstall.style.display = 'inline-block'; });
+    btnInstall.addEventListener('click', async () => { if (deferredPrompt) { deferredPrompt.prompt(); const { outcome } = await deferredPrompt.userChoice; if (outcome === 'accepted') { btnInstall.style.display = 'none'; } deferredPrompt = null; } });
+
     window.onload = loadDropdowns;
-	
-// KODE KANGGO TOMBOL INSTALL PWA
-    let deferredPrompt;
-    const btnInstall = document.getElementById('btnInstall');
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      btnInstall.style.display = 'inline-block'; // Tombol otomatis kaluar mun can di-install
-    });
-
-    btnInstall.addEventListener('click', async () => {
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-          btnInstall.style.display = 'none'; // Tombol leungit mun geus di-install
-        }
-        deferredPrompt = null;
-      }
-    });
-	
   </script>
 </body>
-
 </html>
-
